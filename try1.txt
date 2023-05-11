@@ -109,48 +109,20 @@ title('SMSP干扰信号频谱');
 grid on; axis tight;
 
 %% 估计干扰子波形数目
-
-%% 确定合适的 STFT 参数
-Nfft = 2^nextpow2(length(S)); % FFT 点数
-win = hamming(round(Nfft/4)); % 窗口函数
-noverlap = round(length(win)/2); % 重叠长度
-Nt = floor(length(S)/(length(win)-noverlap)); % 时间切片数目
-
-%% 计算 STFT
-S_stft = zeros(length(win), Nt);
-for n = 1:Nt
-    idx = (1:length(win)) + (n-1)*(length(win)-noverlap);
-    S_win = S(idx).*win;
-    S_fft = fft(S_win, Nfft);
-    S_stft(:,n) = S_fft(1:length(win));
+Me = 0;
+tlabel = [];
+% 使用 stft 函数对混合信号进行时频分析
+[S, F, T] = stft(x, fs, 'Window', hamming(Nw), 'OverlapLength', Nw-Ns, 'FFTLength', Nfft);
+% 对每个时刻 t 的幅值最大的频率通道进行估计
+[~, f] = max(abs(S), [], 1);
+for w = 1:length(f)-1
+    % 计算相邻频率通道的差值
+    delta_f = abs(f(w+1) - f(w));
+    if (delta_f > (B/T))
+        Me = Me+1;
+        tlabel = [tlabel,w];
+    end
 end
-
-%% 绘制 STFT 结果
-figure(5)
-t_stft = linspace(0, T, Nt);
-f_stft = linspace(-fc/2, fc/2, length(win));
-imagesc(t_stft, f_stft*1e-6, abs(S_stft));
-axis xy; colormap jet; colorbar;
-xlabel('时间t/s'); ylabel('频率f/MHz');
-title('SMSP干扰信号的 STFT');
-
-
-% 计算混合信号的STFT
-NFFT = 1024;  % 定义窗口大小
-
-% 计算STFT
-win = hanning(NFFT);  % 窗口函数
-[S,F,T] = spectrogram(x,win,NFFT/2,NFFT,fs);
-
-% 搜索每个切片的最大幅度所对应的频率通道
-[~, idx] = max(abs(S),[],1);
-
-% 对频率通道进行平滑处理
-smoothed_idx = smooth(idx, 10); % 10为平滑窗口大小
-
-% 计算频率从0跳变到B的次数
-B = F(end)/2;
-jump_count = sum(abs(diff(smoothed_idx)) > B);
-
-% 估计干扰信号子波形数
-num_subwaveforms = jump_count + 1;
+tlabel1 = [0, tlabel, length(f)];
+Me = Me+1;
+ke = Me*B/T;
